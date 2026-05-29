@@ -1,8 +1,17 @@
-# Only sync durable docs by default
+# Only sync durable docs and GitHub Pages site by default
 *
 
-# Keep Git metadata rules only
+# Keep Git metadata / site source files
 !.gitignore
+!package.json
+!package-lock.json
+!index.html
+!vite.config.js
+!src/
+!src/**
+!.github/
+!.github/workflows/
+!.github/workflows/**
 
 # Docs folders
 !10-技术知识/
