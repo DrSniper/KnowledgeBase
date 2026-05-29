@@ -1,0 +1,53 @@
+# Only sync durable docs by default
+*
+
+# Keep Git metadata rules only
+!.gitignore
+
+# Docs folders
+!10-技术知识/
+!10-技术知识/**
+!20-排障手册/
+!20-排障手册/**
+!30-项目经验/
+!30-项目经验/**
+!40-操作手册/
+!40-操作手册/**
+!50-代码实践/
+!50-代码实践/**
+!60-架构设计/
+!60-架构设计/**
+!70-学习笔记/
+!70-学习笔记/**
+!80-资源索引/
+!80-资源索引/**
+
+# Ignore meta/explanation/template/internal folders
+00-知识库说明/
+01-Inbox/
+90-归档/
+_templates/
+_tags/
+.obsidian/
+.trash/
+.DS_Store
+
+# Ignore common sensitive/local files
+*.env
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+*.kubeconfig
+kubeconfig*
+config
+credentials
+secrets*
+secret*
+*token*
+*password*
+*passwd*
