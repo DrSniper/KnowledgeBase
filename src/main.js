@@ -29,12 +29,24 @@ const docs = Object.entries(import.meta.glob('../{10-技术知识,20-排障手�
 })).map(([path, raw]) => parseDoc(path, raw))
   .sort((a, b) => String(b.updated || b.created || '').localeCompare(String(a.updated || a.created || '')))
 
+const themeStorageKey = 'knowledgebase-theme'
+const colorSchemeQuery = window.matchMedia?.('(prefers-color-scheme: dark)')
+
 const state = {
   query: '',
   selectedCategory: 'all',
   selectedTag: 'all',
   routeDoc: new URLSearchParams(location.search).get('doc') || '',
+  theme: initialTheme(),
 }
+
+applyTheme(state.theme, false)
+
+colorSchemeQuery?.addEventListener('change', () => {
+  if (state.theme !== 'system') return
+  applyTheme(state.theme, false)
+  render()
+})
 
 function parseDoc(path, raw) {
   const frontmatter = extractFrontmatter(raw)
@@ -127,6 +139,37 @@ function currentDoc() {
   return docs.find(doc => doc.slug === state.routeDoc)
 }
 
+function initialTheme() {
+  let saved = ''
+  try {
+    saved = localStorage.getItem(themeStorageKey)
+  } catch {
+    saved = ''
+  }
+  if (['system', 'light', 'dark'].includes(saved)) return saved
+  return 'system'
+}
+
+function resolvedTheme(theme) {
+  if (theme !== 'system') return theme
+  return colorSchemeQuery?.matches ? 'dark' : 'light'
+}
+
+function applyTheme(theme, persist = true) {
+  document.documentElement.dataset.theme = resolvedTheme(theme)
+  if (!persist) return
+  try {
+    localStorage.setItem(themeStorageKey, theme)
+  } catch {}
+}
+
+function toggleTheme() {
+  const themeOrder = ['system', 'light', 'dark']
+  state.theme = themeOrder[(themeOrder.indexOf(state.theme) + 1) % themeOrder.length]
+  applyTheme(state.theme)
+  render()
+}
+
 function setDoc(doc) {
   state.routeDoc = doc ? doc.slug : ''
   const url = new URL(location.href)
@@ -135,6 +178,16 @@ function setDoc(doc) {
   history.pushState({}, '', url)
   render()
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function renderAndRestoreSearch(selectionStart, selectionEnd) {
+  render()
+  const search = document.querySelector('#search')
+  if (!search) return
+  search.focus()
+  if (selectionStart !== null && selectionEnd !== null) {
+    search.setSelectionRange(selectionStart, selectionEnd)
+  }
 }
 
 function renderShell(content) {
@@ -146,8 +199,11 @@ function renderShell(content) {
           <span><strong>KnowledgeBase</strong><small>DrSniper Docs</small></span>
         </a>
         <nav>
-          <a href="#docs" data-action="home">Docs</a>
+          <a href="#docs" data-action="docs">Docs</a>
           <a href="https://github.com/DrSniper/KnowledgeBase" target="_blank" rel="noreferrer">GitHub</a>
+          <button class="theme-toggle" type="button" data-action="theme" aria-label="切换深浅色主题">
+            <span class="theme-icon">${state.theme === 'system' ? '◑' : state.theme === 'dark' ? '☾' : '☀'}</span><span class="theme-label">${state.theme === 'system' ? 'Auto' : state.theme === 'dark' ? 'Dark' : 'Light'}</span>
+          </button>
         </nav>
       </header>
       ${content}
@@ -162,7 +218,7 @@ function renderHome() {
     <main>
       <section class="hero">
         <div class="hero-badge">个人技术知识库 · GitHub Pages</div>
-        <h1>把问题、排障和经验沉淀成可检索的工程文档。</h1>
+        <h1>把问题、排障和经验沉淀成<span class="gradient-text">可检索的工程文档</span>。</h1>
         <p>收集 Kubernetes、DevOps、日志链路、代码实践和项目经验，用统一模板、分类和标签组织，方便长期复用。</p>
         <div class="hero-actions">
           <a class="button primary" href="#docs">浏览文档</a>
@@ -177,7 +233,8 @@ function renderHome() {
       <section class="category-grid">
         ${categories.map(cat => `
           <button class="category-card ${state.selectedCategory === cat.dir ? 'active' : ''}" data-category="${escapeHtml(cat.dir)}">
-            <span>${cat.icon}</span><strong>${cat.name}</strong><small>${cat.desc}</small>
+            <span class="category-icon">${escapeHtml(cat.icon)}</span>
+            <span class="category-content"><strong>${escapeHtml(cat.name)}</strong><small>${escapeHtml(cat.desc)}</small></span>
           </button>`).join('')}
       </section>
       <section id="docs" class="docs-section">
@@ -189,7 +246,7 @@ function renderHome() {
           <input id="search" type="search" placeholder="搜索标题、摘要、标签..." value="${escapeHtml(state.query)}" />
           <select id="categorySelect">
             <option value="all">全部分类</option>
-            ${categories.map(cat => `<option value="${escapeHtml(cat.dir)}" ${state.selectedCategory === cat.dir ? 'selected' : ''}>${cat.name}</option>`).join('')}
+            ${categories.map(cat => `<option value="${escapeHtml(cat.dir)}" ${state.selectedCategory === cat.dir ? 'selected' : ''}>${escapeHtml(cat.name)}</option>`).join('')}
           </select>
           <select id="tagSelect">
             <option value="all">全部标签</option>
@@ -199,12 +256,19 @@ function renderHome() {
         ${visibleDocs.length ? `<div class="doc-grid">
           ${visibleDocs.map(doc => `
             <article class="doc-card" data-doc="${doc.slug}">
-              <div class="doc-meta"><span>${categoryMeta(doc.dir).name}</span><span>${doc.readingTime} min read</span></div>
+              <div class="doc-card-top">
+                <span class="doc-category">${escapeHtml(categoryMeta(doc.dir).name)}</span>
+                <span class="doc-time">${doc.readingTime} min read</span>
+              </div>
               <h3>${escapeHtml(doc.title)}</h3>
               <p>${escapeHtml(doc.excerpt)}</p>
-              <div class="tag-row">${doc.tags.slice(0, 4).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</div>
+              <div class="doc-date">Updated ${escapeHtml(doc.updated || doc.created || 'unknown')}</div>
+              <div class="doc-card-footer">
+                <div class="tag-row">${doc.tags.slice(0, 4).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')}</div>
+                <span class="doc-link">阅读 →</span>
+              </div>
             </article>`).join('')}
-        </div>` : '<div class="empty">暂无匹配文档。</div>'}
+        </div>` : '<div class="empty"><strong>未找到匹配文档</strong><span>尝试清除分类、标签或关键词。</span></div>'}
       </section>
     </main>`)
 
@@ -216,10 +280,20 @@ function renderHome() {
   document.querySelectorAll('[data-doc]').forEach(el => el.addEventListener('click', () => {
     setDoc(docs.find(doc => doc.slug === el.dataset.doc))
   }))
-  document.querySelector('#search')?.addEventListener('input', event => {
+  const search = document.querySelector('#search')
+  let isComposing = false
+  search?.addEventListener('compositionstart', () => {
+    isComposing = true
+  })
+  search?.addEventListener('compositionend', event => {
+    isComposing = false
     state.query = event.target.value
-    render()
-    document.querySelector('#search')?.focus()
+    renderAndRestoreSearch(event.target.selectionStart, event.target.selectionEnd)
+  })
+  search?.addEventListener('input', event => {
+    if (isComposing || event.isComposing) return
+    state.query = event.target.value
+    renderAndRestoreSearch(event.target.selectionStart, event.target.selectionEnd)
   })
   document.querySelector('#categorySelect')?.addEventListener('change', event => {
     state.selectedCategory = event.target.value
@@ -245,19 +319,22 @@ function renderDoc(doc) {
         <div class="toc-card">
           <span class="eyebrow">Current</span>
           <h3>${escapeHtml(doc.title)}</h3>
-          <p>${categoryMeta(doc.dir).name} · ${doc.readingTime} min read</p>
+          <p>${escapeHtml(categoryMeta(doc.dir).name)} · ${doc.readingTime} min read</p>
           <div class="tag-row">${doc.tags.map(tag => `<span data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</span>`).join('')}</div>
         </div>
       </aside>
       <article class="markdown-body">
-        <div class="article-kicker">${categoryMeta(doc.dir).name}</div>
-        <h1>${escapeHtml(doc.title)}</h1>
-        <div class="article-meta">
-          <span>Created: ${escapeHtml(doc.created || 'unknown')}</span>
-          <span>Updated: ${escapeHtml(doc.updated || 'unknown')}</span>
-          <span>Status: ${escapeHtml(doc.status || 'active')}</span>
-        </div>
-        <div>${doc.html}</div>
+        <header class="article-header">
+          <div class="article-kicker">${escapeHtml(categoryMeta(doc.dir).name)}</div>
+          <h1>${escapeHtml(doc.title)}</h1>
+          <div class="article-meta">
+            <span>Created: ${escapeHtml(doc.created || 'unknown')}</span>
+            <span>Updated: ${escapeHtml(doc.updated || 'unknown')}</span>
+            <span>Status: ${escapeHtml(doc.status || 'active')}</span>
+          </div>
+          ${doc.tags.length ? `<div class="article-tags tag-row">${doc.tags.map(tag => `<span data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+        </header>
+        <div class="article-content">${doc.html}</div>
       </article>
     </main>`)
   document.querySelector('[data-action="back"]')?.addEventListener('click', () => setDoc(null))
@@ -275,6 +352,16 @@ function render() {
     event.preventDefault()
     setDoc(null)
   }))
+  document.querySelector('[data-action="docs"]')?.addEventListener('click', event => {
+    event.preventDefault()
+    state.routeDoc = ''
+    const url = new URL(location.href)
+    url.searchParams.delete('doc')
+    history.pushState({}, '', url)
+    render()
+    requestAnimationFrame(() => document.querySelector('#docs')?.scrollIntoView({ behavior: 'smooth' }))
+  })
+  document.querySelector('[data-action="theme"]')?.addEventListener('click', toggleTheme)
 }
 
 window.addEventListener('popstate', () => {
